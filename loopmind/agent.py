@@ -3,7 +3,7 @@ import os
 import json
 
 class Agent:
-    def __init__(self, model, system, prompt = None, connectors = [], events = None, json = True):
+    def __init__(self, model, system, prompt = None, connectors = [], events = None, json = False):
         self.model = model
         self.tools = []
         self.events = events
@@ -45,7 +45,13 @@ class Agent:
 
         while True:
             await self.events.emit("model_called")
-            response = completion(model=self.model, tools=tools if tools else None, messages=self.messages, stream=False)
+            response = completion(
+                model=self.model,
+                tools=tools if tools else None,
+                messages=self.messages,
+                stream=False,
+                response_format = { "type": "json_object" } if self.json else Non
+            )
             # response_format= { "type": "json_object" } if self.json else None) LmStudio only accepts json_schema but it was causing problems before
 
             message = response.choices[0].message
