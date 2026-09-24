@@ -50,7 +50,7 @@ class Agent:
                 tools=tools if tools else None,
                 messages=self.messages,
                 stream=False,
-                response_format = { "type": "json_object" } if self.json else Non
+                response_format = { "type": "json_object" } if self.json else None
             )
             # response_format= { "type": "json_object" } if self.json else None) LmStudio only accepts json_schema but it was causing problems before
 
