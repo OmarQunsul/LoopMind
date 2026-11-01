@@ -1,9 +1,13 @@
-from litellm import completion
+from litellm import completion, completion_cost
 import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Agent:
-    def __init__(self, model, system, prompt = None, connectors = [], events = None, json = False):
+    def __init__(self, model, system, prompt=None, connectors=[], events=None, json=False,
+                 input_cost_per_token=None, output_cost_per_token=None):
         self.model = model
         self.tools = []
         self.events = events
@@ -14,6 +18,49 @@ class Agent:
             self.messages = [{"role": "system", "content": system}]
         self.json = json
         self.recent_tool_calls = []
+
+        # Cost / usage tracking
+        self.total_cost = 0.0
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+        self.call_count = 0
+        # Optional custom pricing (useful for local models like LM Studio)
+        self.input_cost_per_token = input_cost_per_token
+        self.output_cost_per_token = output_cost_per_token
+
+    def _track_cost(self, response):
+        """Accumulate usage + cost from a completion response and print a debug line."""
+        self.call_count += 1
+
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+        completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+        self.total_prompt_tokens += prompt_tokens
+        self.total_completion_tokens += completion_tokens
+
+        call_cost = 0.0
+        try:
+            if self.input_cost_per_token is not None or self.output_cost_per_token is not None:
+                # Custom pricing override
+                call_cost = (
+                    prompt_tokens * (self.input_cost_per_token or 0)
+                    + completion_tokens * (self.output_cost_per_token or 0)
+                )
+            else:
+                call_cost = completion_cost(completion_response=response) or 0.0
+        except Exception as e:
+            # Unknown model pricing (e.g. LM Studio) -> treat as 0
+            logger.debug(f"Could not compute cost for model {self.model}: {e}")
+
+        self.total_cost += call_cost
+
+        print(
+            f"[DEBUG][cost] call #{self.call_count} | "
+            f"tokens: {prompt_tokens} in / {completion_tokens} out | "
+            f"cost: ${call_cost:.6f} | "
+            f"running total: ${self.total_cost:.6f} "
+            f"({self.total_prompt_tokens} in / {self.total_completion_tokens} out)"
+        )
 
     def user(self, message):
         self.messages.append({"role": "user", "content": message})
@@ -50,27 +97,24 @@ class Agent:
                 tools=tools if tools else None,
                 messages=self.messages,
                 stream=False,
-                response_format = { "type": "json_object" } if self.json else None
+                response_format={"type": "json_object"} if self.json else None
             )
-            # response_format= { "type": "json_object" } if self.json else None) LmStudio only accepts json_schema but it was causing problems before
+
+            self._track_cost(response)   # <-- new
 
             message = response.choices[0].message
             await self.events.emit("message", message)
 
-
-            # Make sure to preserve the thinking content. And add a method to clear all the previous thinking contents
-            # for example to clean it up every time a user sends a new prompt. Maybe something that can be done automatically on the #user() method
             self.messages.append({
-                "role": message.role,        # "assistant"
-                # "response_format": { "type": "json_schema" },
-                "content": message.content,   # the text response
+                "role": message.role,
+                "content": message.content,
                 "tool_calls": [
                     {
                         "id": tc.id,
                         "type": tc.type,
                         "function": {
                             "name": tc.function.name,
-                            "arguments": tc.function.arguments  # JSON string
+                            "arguments": tc.function.arguments
                         }
                     }
                     for tc in message.tool_calls or []
@@ -79,7 +123,7 @@ class Agent:
 
             if message.tool_calls:
                 for tool_call in message.tool_calls:
-                    arguments = json.loads(tool_call.function.arguments) # Arguments is for some reason a string
+                    arguments = json.loads(tool_call.function.arguments)
                     object = {"function": tool_call.function.name, "arguments": arguments, "id": tool_call.id}
                     self.recent_tool_calls.append(object)
                     await self.events.emit("tool_call", object)
@@ -87,9 +131,10 @@ class Agent:
                     await self.events.emit("tool_answer", {"tool_call": object, "data": data})
                     self.messages.append({
                         "role": "tool",
-                        "tool_call_id": tool_call.id,    # must match the tool_call id above
+                        "tool_call_id": tool_call.id,
                         "name": tool_call.function.name,
-                        "content": data   # must be a string
+                        "content": data
                     })
             else:
+                print(f"[DEBUG][cost] FINAL total: ${self.total_cost:.6f} over {self.call_count} calls")
                 return message.content
