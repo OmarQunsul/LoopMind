@@ -117,7 +117,7 @@ Agent(model, system, prompt, connectors, events, json=True)
 | Method                                  | Description                                                                   |
 | --------------------------------------- | ----------------------------------------------------------------------------- |
 | `await agent.loadTools()`               | Loads tool definitions from all connectors. **Must be called before `execute()`.** |
-| `await agent.execute()`                 | Runs the agentic loop and returns the final text answer.                      |
+| `await agent.execute()`                 | Runs the agentic loop and returns `{"content", "total_cost", "average_cost_per_call"}`. |
 | `await agent.execute_tool_call(name, arguments)` | Directly invokes a named tool on the matching connector and returns its JSON result. |
 
 The attribute `agent.recent_tool_calls` accumulates every tool call made during execution as `{"function", "arguments", "id"}` dicts.
@@ -139,7 +139,7 @@ The attribute `agent.recent_tool_calls` accumulates every tool call made during 
 Methods:
 
 - `await agent.loadTools()` — loads tool definitions from all connectors. Must be called before `execute()`.
-- `await agent.execute()` — runs the agentic loop and returns the final text answer.
+- `await agent.execute()` — runs the agentic loop and returns `{"content", "total_cost", "average_cost_per_call"}`.
 - `agent.recent_tool_calls` — list of all tool calls made during execution (`{"function", "arguments", "id"}`).
 
 ### `McpClient(url)`

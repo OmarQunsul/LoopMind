@@ -137,4 +137,9 @@ class Agent:
                     })
             else:
                 print(f"[DEBUG][cost] FINAL total: ${self.total_cost:.6f} over {self.call_count} calls")
-                return message.content
+                average_cost_per_call = self.total_cost / self.call_count if self.call_count else 0.0
+                return {
+                    "content": message.content,
+                    "total_cost": self.total_cost,
+                    "average_cost_per_call": average_cost_per_call,
+                }
