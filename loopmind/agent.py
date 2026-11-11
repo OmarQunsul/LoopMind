@@ -57,8 +57,8 @@ class Agent:
         print(
             f"[DEBUG][cost] call #{self.call_count} | "
             f"tokens: {prompt_tokens} in / {completion_tokens} out | "
-            f"cost: ${call_cost:.6f} | "
-            f"running total: ${self.total_cost:.6f} "
+            f"call cost: ${call_cost:.6f} | "
+            f"total cost: ${self.total_cost:.6f} "
             f"({self.total_prompt_tokens} in / {self.total_completion_tokens} out)"
         )
 
